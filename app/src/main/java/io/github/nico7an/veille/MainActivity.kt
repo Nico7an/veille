@@ -9,21 +9,31 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -38,21 +48,31 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
-private val Nuit = Color(0xFF14130F)
-private val Ardoise = Color(0xFF221F19)
-private val Craie = Color(0xFFF2EDE4)
-private val Cendre = Color(0xFF8C857A)
-private val Sodium = Color(0xFFE8A33D)
+/** Palette HyperOS : fond gris très clair / noir, cartes blanches / gris foncé, bleu Xiaomi. */
+private class Couleurs(sombre: Boolean) {
+    val fond = if (sombre) Color(0xFF000000) else Color(0xFFF7F7F7)
+    val carte = if (sombre) Color(0xFF1C1C1C) else Color(0xFFFFFFFF)
+    val texte = if (sombre) Color(0xFFF2F2F2) else Color(0xFF1A1A1A)
+    val secondaire = if (sombre) Color(0xFF8C8C8C) else Color(0xFF8A8A8A)
+    val gris = if (sombre) Color(0xFF2C2C2C) else Color(0xFFF0F0F0)
+    val piste = if (sombre) Color(0xFF2A2A2A) else Color(0xFFEDEDED)
+    val bleu = Color(0xFF3482FF)
+    val bleuPale = if (sombre) Color(0xFF14284A) else Color(0xFFE5EFFF)
+    val orange = Color(0xFFFF8A00)
+}
 
 private val PRESETS = listOf(15, 30, 45, 60, 90)
+private val ARRONDI = RoundedCornerShape(24.dp)
 
 class MainActivity : ComponentActivity() {
     /** Incrémenté à chaque retour sur l'appli pour relire l'état (minuteur, accessibilité). */
@@ -81,6 +101,7 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun Ecran(retour: Int) {
         val c = this
+        val k = Couleurs(isSystemInDarkTheme())
         var fin by remember { mutableLongStateOf(Minuteur.fin(c)) }
         var duree by remember { mutableIntStateOf(Minuteur.duree(c)) }
         var remettre by remember { mutableStateOf(Minuteur.prefs(c).getBoolean("remettre", true)) }
@@ -95,142 +116,248 @@ class MainActivity : ComponentActivity() {
             while (true) {
                 maintenant = System.currentTimeMillis()
                 if (fin != 0L && maintenant >= fin) fin = 0L
-                delay(1000)
+                delay(250)
             }
         }
 
-        Column(
-            Modifier
-                .fillMaxSize()
-                .background(Nuit)
-                .safeDrawingPadding()
-                .padding(horizontal = 28.dp, vertical = 20.dp)
-        ) {
-            Text("veille", color = Cendre, fontSize = 15.sp, letterSpacing = 3.sp)
-            Spacer(Modifier.weight(1f))
-
+        val minuteur: @Composable ColumnScope.() -> Unit = {
             if (fin != 0L) {
                 val reste = ((fin - maintenant).coerceAtLeast(0) + 999) / 1000
-                Text(
-                    "%d:%02d".format(reste / 60, reste % 60),
-                    color = Craie, fontSize = 88.sp, fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Light, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center,
-                )
-                Text(
-                    "extinction à ${Minuteur.heure(fin)}",
-                    color = Sodium, fontSize = 17.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center,
-                )
-                Spacer(Modifier.height(48.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Bouton("+15 min", Modifier.weight(1f), plein = false) {
+                val total = (fin - Minuteur.debut(c)).coerceAtLeast(1)
+                Anneau(k, (fin - maintenant).toFloat() / total) {
+                    Text(
+                        if (reste >= 3600) "%d:%02d:%02d".format(reste / 3600, reste / 60 % 60, reste % 60)
+                        else "%02d:%02d".format(reste / 60, reste % 60),
+                        color = k.texte, fontSize = 64.sp, fontWeight = FontWeight.Light,
+                    )
+                    Text("Mise en veille à ${Minuteur.heure(fin)}", color = k.secondaire, fontSize = 16.sp)
+                }
+                Spacer(Modifier.height(28.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Pilule("+15 min", k.gris, k.texte, Modifier.weight(1f)) {
                         Minuteur.prolonger(c, 15); fin = Minuteur.fin(c)
                     }
-                    Bouton("Annuler", Modifier.weight(1f), plein = false) {
+                    Pilule("Annuler", k.gris, k.orange, Modifier.weight(1f)) {
                         Minuteur.annuler(c); fin = 0L
                     }
                 }
             } else {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Rond("−") { duree = (duree - 5).coerceAtLeast(5) }
-                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("$duree", color = Craie, fontSize = 96.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Light)
-                        Text("minutes", color = Cendre, fontSize = 15.sp)
+                Anneau(k, 1f, discret = true) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Rond("−", k) { duree = (duree - 5).coerceAtLeast(5) }
+                        Column(Modifier.widthIn(min = 150.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("$duree", color = k.texte, fontSize = 80.sp, fontWeight = FontWeight.Light)
+                            Text("minutes", color = k.secondaire, fontSize = 16.sp)
+                        }
+                        Rond("+", k) { duree = (duree + 5).coerceAtMost(600) }
                     }
-                    Rond("+") { duree = (duree + 5).coerceAtMost(600) }
                 }
-                Spacer(Modifier.height(32.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Spacer(Modifier.height(24.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     PRESETS.forEach { m ->
                         val choisi = m == duree
                         Box(
                             Modifier
                                 .weight(1f)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (choisi) Ardoise else Nuit)
-                                .border(1.dp, if (choisi) Sodium else Ardoise, RoundedCornerShape(10.dp))
+                                .clip(CircleShape)
+                                .background(if (choisi) k.bleuPale else k.gris)
                                 .clickable { duree = m }
                                 .padding(vertical = 12.dp),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Text("$m", color = if (choisi) Sodium else Craie, fontSize = 16.sp)
+                            Text(
+                                "$m min", color = if (choisi) k.bleu else k.texte, fontSize = 15.sp,
+                                fontWeight = if (choisi) FontWeight.SemiBold else FontWeight.Normal,
+                            )
                         }
                     }
                 }
-                Spacer(Modifier.height(28.dp))
-                Bouton("Lancer", Modifier.fillMaxWidth(), plein = true) {
+                Spacer(Modifier.height(20.dp))
+                Pilule("Démarrer", k.bleu, Color.White, Modifier.fillMaxWidth()) {
                     demanderNotifications()
                     Minuteur.demarrer(c, duree)
                     fin = Minuteur.fin(c)
                 }
             }
+        }
 
-            Spacer(Modifier.weight(1f))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "Remettre le volume au déverrouillage",
-                    color = Craie, fontSize = 15.sp, modifier = Modifier.weight(1f),
-                )
-                Switch(
-                    checked = remettre,
-                    onCheckedChange = {
-                        remettre = it
-                        Minuteur.prefs(c).edit().putBoolean("remettre", it).apply()
-                    },
-                    colors = SwitchDefaults.colors(
-                        checkedTrackColor = Sodium, checkedThumbColor = Nuit,
-                        uncheckedTrackColor = Ardoise, uncheckedThumbColor = Cendre, uncheckedBorderColor = Ardoise,
-                    ),
+        val reglages: @Composable ColumnScope.() -> Unit = {
+            Titre("À la fin du minuteur", k)
+            Carte(k) {
+                Etape(k, "1", "Pause", "Ce qui est en lecture s'arrête")
+                Etape(k, "2", "Volume coupé", "Le volume multimédia passe à zéro")
+                Etape(
+                    k, "3", "Mise en veille",
+                    if (accessibilite) "L'écran se verrouille" else "Service d'accessibilité à activer",
+                    alerte = !accessibilite,
                 )
             }
-
-            if (!accessibilite) {
-                Spacer(Modifier.height(16.dp))
-                Column(
+            Spacer(Modifier.height(20.dp))
+            Titre("Options", k)
+            Carte(k) {
+                Row(
                     Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Ardoise)
-                        .clickable { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
-                        .padding(16.dp)
+                        .clickable {
+                            remettre = !remettre
+                            Minuteur.prefs(c).edit().putBoolean("remettre", remettre).apply()
+                        }
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Verrouillage de l'écran désactivé", color = Sodium, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "Touchez ici, puis Applications installées → Veille → activer. " +
-                            "Si l'option est grisée : Infos de l'appli → ⋮ → Autoriser les paramètres restreints.",
-                        color = Cendre, fontSize = 13.sp, lineHeight = 18.sp,
+                    Column(Modifier.weight(1f)) {
+                        Text("Remettre le volume", color = k.texte, fontSize = 17.sp)
+                        Text("Au déverrouillage suivant", color = k.secondaire, fontSize = 13.sp)
+                    }
+                    Switch(
+                        checked = remettre,
+                        onCheckedChange = {
+                            remettre = it
+                            Minuteur.prefs(c).edit().putBoolean("remettre", it).apply()
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedTrackColor = k.bleu, checkedThumbColor = Color.White, checkedBorderColor = k.bleu,
+                            uncheckedTrackColor = k.piste, uncheckedThumbColor = Color.White, uncheckedBorderColor = k.piste,
+                        ),
                     )
+                }
+            }
+            if (!accessibilite) {
+                Spacer(Modifier.height(20.dp))
+                Carte(k) {
+                    Column(
+                        Modifier
+                            .clickable { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+                            .padding(horizontal = 20.dp, vertical = 16.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Activer la mise en veille", color = k.bleu, fontSize = 17.sp, modifier = Modifier.weight(1f))
+                            Text("›", color = k.secondaire, fontSize = 22.sp)
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Accessibilité → Applications installées → Veille. Si c'est grisé : " +
+                                "Infos de l'appli → ⋮ → Autoriser les paramètres restreints.",
+                            color = k.secondaire, fontSize = 13.sp, lineHeight = 18.sp,
+                        )
+                    }
+                }
+            }
+        }
+
+        BoxWithConstraints(
+            Modifier
+                .fillMaxSize()
+                .background(k.fond)
+                .safeDrawingPadding()
+        ) {
+            val large = maxWidth > 760.dp
+            Column(Modifier.fillMaxSize().padding(horizontal = if (large) 48.dp else 20.dp)) {
+                Spacer(Modifier.height(if (large) 28.dp else 16.dp))
+                Text("Veille", color = k.texte, fontSize = 32.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (fin != 0L) "Minuteur en cours" else "Minuteur de mise en veille",
+                    color = k.secondaire, fontSize = 15.sp,
+                )
+                Spacer(Modifier.height(24.dp))
+                if (large) {
+                    Row(Modifier.fillMaxSize().padding(bottom = 32.dp), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
+                        Column(
+                            Modifier
+                                .weight(1.15f)
+                                .fillMaxHeight()
+                                .clip(ARRONDI)
+                                .background(k.carte)
+                                .padding(32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                            content = minuteur,
+                        )
+                        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), content = reglages)
+                    }
+                } else {
+                    Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+                        Column(
+                            Modifier.clip(ARRONDI).background(k.carte).padding(20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            content = minuteur,
+                        )
+                        Spacer(Modifier.height(24.dp))
+                        reglages()
+                    }
                 }
             }
         }
     }
 }
 
+/** Anneau de progression façon Horloge HyperOS. */
 @Composable
-private fun Bouton(texte: String, modifier: Modifier, plein: Boolean, action: () -> Unit) {
-    Box(
-        modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(if (plein) Sodium else Ardoise)
-            .clickable(onClick = action)
-            .padding(vertical = 18.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(texte, color = if (plein) Nuit else Craie, fontSize = 18.sp, fontWeight = FontWeight.Medium)
+private fun Anneau(k: Couleurs, progression: Float, discret: Boolean = false, contenu: @Composable ColumnScope.() -> Unit) {
+    val p by animateFloatAsState(progression.coerceIn(0f, 1f), label = "anneau")
+    Box(Modifier.widthIn(max = 380.dp).fillMaxWidth().aspectRatio(1f), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize().padding(8.dp)) {
+            val epaisseur = 10.dp.toPx()
+            val cote = size.minDimension - epaisseur
+            val origine = Offset((size.width - cote) / 2, (size.height - cote) / 2)
+            drawArc(k.piste, 0f, 360f, false, origine, Size(cote, cote), style = Stroke(epaisseur))
+            if (!discret) {
+                drawArc(k.bleu, -90f, 360f * p, false, origine, Size(cote, cote), style = Stroke(epaisseur, cap = StrokeCap.Round))
+            }
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally, content = contenu)
     }
 }
 
 @Composable
-private fun Rond(texte: String, action: () -> Unit) {
+private fun Pilule(texte: String, fond: Color, couleur: Color, modifier: Modifier, action: () -> Unit) {
+    Box(
+        modifier
+            .clip(CircleShape)
+            .background(fond)
+            .clickable(onClick = action)
+            .padding(vertical = 16.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(texte, color = couleur, fontSize = 17.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+private fun Rond(texte: String, k: Couleurs, action: () -> Unit) {
     Box(
         Modifier
-            .size(56.dp)
-            .clip(RoundedCornerShape(28.dp))
-            .border(1.dp, Ardoise, RoundedCornerShape(28.dp))
+            .size(52.dp)
+            .clip(CircleShape)
+            .background(k.gris)
             .clickable(onClick = action),
         contentAlignment = Alignment.Center,
     ) {
-        Text(texte, color = Craie, fontSize = 26.sp)
+        Text(texte, color = k.texte, fontSize = 24.sp)
+    }
+}
+
+@Composable
+private fun Titre(texte: String, k: Couleurs) {
+    Text(texte, color = k.secondaire, fontSize = 13.sp, modifier = Modifier.padding(start = 20.dp, bottom = 8.dp))
+}
+
+@Composable
+private fun Carte(k: Couleurs, contenu: @Composable ColumnScope.() -> Unit) {
+    Column(Modifier.fillMaxWidth().clip(ARRONDI).background(k.carte).padding(vertical = 4.dp), content = contenu)
+}
+
+@Composable
+private fun Etape(k: Couleurs, numero: String, titre: String, detail: String, alerte: Boolean = false) {
+    Row(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier.size(32.dp).clip(CircleShape).background(if (alerte) k.gris else k.bleuPale),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(numero, color = if (alerte) k.orange else k.bleu, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        }
+        Column(Modifier.padding(start = 14.dp)) {
+            Text(titre, color = k.texte, fontSize = 17.sp)
+            Text(detail, color = if (alerte) k.orange else k.secondaire, fontSize = 13.sp)
+        }
     }
 }

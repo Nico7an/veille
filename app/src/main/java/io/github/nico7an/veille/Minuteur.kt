@@ -27,12 +27,15 @@ object Minuteur {
 
     fun actif(c: Context) = fin(c) != 0L
 
+    /** Début du minuteur, pour la progression de l'anneau. */
+    fun debut(c: Context): Long = prefs(c).getLong("debut", System.currentTimeMillis())
+
 
     fun duree(c: Context) = prefs(c).getInt("duree", 45)
 
     fun demarrer(c: Context, minutes: Int) {
         val fin = System.currentTimeMillis() + minutes * 60_000L
-        prefs(c).edit().putLong("fin", fin).putInt("duree", minutes).apply()
+        prefs(c).edit().putLong("debut", System.currentTimeMillis()).putLong("fin", fin).putInt("duree", minutes).apply()
         programmer(c, fin)
     }
 
