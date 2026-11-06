@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Veille</string>
+    <string name="accessibilite_description">Sert uniquement à verrouiller l\'écran (comme le bouton marche/arrêt) quand le minuteur arrive à zéro. Veille ne lit pas le contenu de l\'écran.</string>
+</resources>

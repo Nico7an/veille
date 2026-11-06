@@ -1,0 +1,61 @@
+# Publier une release sur GitHub (tag vX.Y.Z) → l'APK signé est construit et joint à la release.
+# Lancement manuel possible : l'APK est alors disponible en artefact du run.
+name: APK
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Clé de signature
+        env:
+          KEYSTORE_B64: ${{ secrets.VEILLE_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/veille.jks"
+            echo "VEILLE_KEYSTORE=$RUNNER_TEMP/veille.jks" >> "$GITHUB_ENV"
+          fi
+
+      - name: Construire l'APK
+        env:
+          VEILLE_KEYSTORE_MDP: ${{ secrets.VEILLE_KEYSTORE_MDP }}
+          VEILLE_VERSION: ${{ github.event.release.tag_name || 'dev' }}
+          VEILLE_NUMERO: ${{ github.run_number }}
+        run: gradle --no-daemon assembleRelease
+
+      - name: Renommer
+        run: |
+          VERSION="${{ github.event.release.tag_name || format('dev-{0}', github.run_number) }}"
+          cp app/build/outputs/apk/release/app-release.apk "veille-$VERSION.apk"
+          echo "APK=veille-$VERSION.apk" >> "$GITHUB_ENV"
+
+      - name: Joindre à la release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" "$APK" --clobber
+
+      - name: Artefact
+        if: github.event_name != 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APK }}
+          path: ${{ env.APK }}
