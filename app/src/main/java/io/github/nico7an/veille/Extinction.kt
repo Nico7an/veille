@@ -36,12 +36,7 @@ object Extinction {
 
         Handler(Looper.getMainLooper()).postDelayed({
             try {
-                // 2. Volume coupé (mémorisé pour le déverrouillage si l'option est active).
-                val volume = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
-                val prefs = Minuteur.prefs(c)
-                if (prefs.getBoolean("remettre", true) && volume > 0) {
-                    prefs.edit().putInt("volume", volume).apply()
-                }
+                // 2. Volume coupé.
                 try {
                     audio.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0)
                 } catch (_: SecurityException) {
@@ -49,22 +44,10 @@ object Extinction {
                 audio.abandonAudioFocusRequest(focus)
 
                 // 3. Mise en veille.
-                VeilleAccessibilite.verrouiller()
+                AdminVeille.verrouiller(c)
             } finally {
                 fini()
             }
         }, DELAI_PAUSE)
-    }
-
-    /** Remet le volume d'avant la mise en veille, s'il a été mémorisé. */
-    fun remettreVolume(c: Context) {
-        val prefs = Minuteur.prefs(c)
-        val volume = prefs.getInt("volume", -1)
-        if (volume < 0) return
-        prefs.edit().remove("volume").apply()
-        val audio = c.getSystemService(AudioManager::class.java)
-        if (audio.getStreamVolume(AudioManager.STREAM_MUSIC) == 0) {
-            audio.setStreamVolume(AudioManager.STREAM_MUSIC, volume, 0)
-        }
     }
 }

@@ -1,11 +1,11 @@
 package io.github.nico7an.veille
 
 import android.Manifest
+import android.app.admin.DevicePolicyManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -34,8 +34,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -75,7 +73,7 @@ private val PRESETS = listOf(15, 30, 45, 60, 90)
 private val ARRONDI = RoundedCornerShape(24.dp)
 
 class MainActivity : ComponentActivity() {
-    /** Incrémenté à chaque retour sur l'appli pour relire l'état (minuteur, accessibilité). */
+    /** Incrémenté à chaque retour sur l'appli pour relire l'état (minuteur, administrateur). */
     private var retour by mutableIntStateOf(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -86,7 +84,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        Extinction.remettreVolume(this)
         retour++
     }
 
@@ -104,13 +101,12 @@ class MainActivity : ComponentActivity() {
         val k = Couleurs(isSystemInDarkTheme())
         var fin by remember { mutableLongStateOf(Minuteur.fin(c)) }
         var duree by remember { mutableIntStateOf(Minuteur.duree(c)) }
-        var remettre by remember { mutableStateOf(Minuteur.prefs(c).getBoolean("remettre", true)) }
         var maintenant by remember { mutableLongStateOf(System.currentTimeMillis()) }
-        var accessibilite by remember { mutableStateOf(VeilleAccessibilite.active(c)) }
+        var admin by remember { mutableStateOf(AdminVeille.active(c)) }
 
         LaunchedEffect(retour) {
             fin = Minuteur.fin(c)
-            accessibilite = VeilleAccessibilite.active(c)
+            admin = AdminVeille.active(c)
         }
         LaunchedEffect(fin) {
             while (true) {
@@ -188,45 +184,23 @@ class MainActivity : ComponentActivity() {
                 Etape(k, "2", "Volume coupé", "Le volume multimédia passe à zéro")
                 Etape(
                     k, "3", "Mise en veille",
-                    if (accessibilite) "L'écran se verrouille" else "Service d'accessibilité à activer",
-                    alerte = !accessibilite,
+                    if (admin) "L'écran se verrouille" else "Administrateur d'appareil à activer",
+                    alerte = !admin,
                 )
             }
-            Spacer(Modifier.height(20.dp))
-            Titre("Options", k)
-            Carte(k) {
-                Row(
-                    Modifier
-                        .clickable {
-                            remettre = !remettre
-                            Minuteur.prefs(c).edit().putBoolean("remettre", remettre).apply()
-                        }
-                        .padding(horizontal = 20.dp, vertical = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Remettre le volume", color = k.texte, fontSize = 17.sp)
-                        Text("Au déverrouillage suivant", color = k.secondaire, fontSize = 13.sp)
-                    }
-                    Switch(
-                        checked = remettre,
-                        onCheckedChange = {
-                            remettre = it
-                            Minuteur.prefs(c).edit().putBoolean("remettre", it).apply()
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedTrackColor = k.bleu, checkedThumbColor = Color.White, checkedBorderColor = k.bleu,
-                            uncheckedTrackColor = k.piste, uncheckedThumbColor = Color.White, uncheckedBorderColor = k.piste,
-                        ),
-                    )
-                }
-            }
-            if (!accessibilite) {
+            if (!admin) {
                 Spacer(Modifier.height(20.dp))
                 Carte(k) {
                     Column(
                         Modifier
-                            .clickable { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+                            .clickable { startActivity(
+                                    Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+                                        .putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, AdminVeille.composant(c))
+                                        .putExtra(
+                                            DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                                            "Sert uniquement à verrouiller l'écran quand le minuteur arrive à zéro.",
+                                        )
+                                ) }
                             .padding(horizontal = 20.dp, vertical = 16.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -235,8 +209,7 @@ class MainActivity : ComponentActivity() {
                         }
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            "Accessibilité → Applications installées → Veille. Si c'est grisé : " +
-                                "Infos de l'appli → ⋮ → Autoriser les paramètres restreints.",
+                            "Sert uniquement à verrouiller l'écran, comme le bouton marche/arrêt.",
                             color = k.secondaire, fontSize = 13.sp, lineHeight = 18.sp,
                         )
                     }

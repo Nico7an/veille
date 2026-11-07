@@ -6,15 +6,15 @@ Minuteur de sommeil pour Android. Quand il arrive à zéro :
 2. **volume média coupé** ;
 3. **mise en veille** : l'écran est verrouillé, comme avec le bouton marche/arrêt.
 
-Durées rapides (15 à 90 min) ou au pas de 5 min, notification à rebours avec « +15 min » et « Annuler », tuile pour les réglages rapides (lance la dernière durée). Option pour remettre le volume au déverrouillage.
+Durées rapides (15 à 90 min) ou au pas de 5 min, notification à rebours avec « +15 min » et « Annuler », tuile pour les réglages rapides (lance la dernière durée).
 
 ## Installation
 
 Télécharger l'APK de la [dernière release](../../releases/latest) et l'installer.
 
-Pour le verrouillage de l'écran, activer le service d'accessibilité : *Paramètres → Accessibilité → Applications installées → Veille*. Il ne lit pas le contenu de l'écran ; il sert uniquement à verrouiller. Sur Android 13 et plus, si l'option est grisée : *Infos de l'appli → ⋮ → Autoriser les paramètres restreints*, puis recommencer.
+Pour le verrouillage de l'écran, accepter l'activation de l'administrateur d'appareil quand l'appli la propose (bouton « Activer la mise en veille »). Il sert uniquement à verrouiller l'écran. Pour désinstaller l'appli, retirer d'abord l'administrateur : *Paramètres → Mot de passe et sécurité → Administrateurs de l'appareil*.
 
-Sans ce service, la pause et la coupure du volume fonctionnent quand même.
+Sans cet administrateur, la pause et la coupure du volume fonctionnent quand même.
 
 ## Construire
 
