@@ -9,6 +9,7 @@ class FinReceiver : BroadcastReceiver() {
         when (intent.action) {
             ANNULER -> Minuteur.annuler(c)
             PLUS -> Minuteur.prolonger(c, 15)
+            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> Minuteur.relancer(c)
             FIN -> {
                 val attente = goAsync()
                 Extinction.lancer(c.applicationContext) { attente.finish() }

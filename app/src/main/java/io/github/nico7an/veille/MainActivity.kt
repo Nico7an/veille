@@ -2,10 +2,13 @@ package io.github.nico7an.veille
 
 import android.Manifest
 import android.app.admin.DevicePolicyManager
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -85,6 +88,25 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         retour++
+    }
+
+    private fun activerAdmin() {
+        val demande = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+            .putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, AdminVeille.composant(this))
+            .putExtra(
+                DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                "Sert uniquement à verrouiller l'écran quand le minuteur arrive à zéro.",
+            )
+        try {
+            startActivity(demande)
+        } catch (_: ActivityNotFoundException) {
+            try {
+                startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS))
+                Toast.makeText(this, "Activer Veille dans Administrateurs de l'appareil", Toast.LENGTH_LONG).show()
+            } catch (_: ActivityNotFoundException) {
+                Toast.makeText(this, "Écran d'activation introuvable sur cet appareil", Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     private fun demanderNotifications() {
@@ -193,14 +215,7 @@ class MainActivity : ComponentActivity() {
                 Carte(k) {
                     Column(
                         Modifier
-                            .clickable { startActivity(
-                                    Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
-                                        .putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, AdminVeille.composant(c))
-                                        .putExtra(
-                                            DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-                                            "Sert uniquement à verrouiller l'écran quand le minuteur arrive à zéro.",
-                                        )
-                                ) }
+                            .clickable { activerAdmin() }
                             .padding(horizontal = 20.dp, vertical = 16.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
